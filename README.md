@@ -1,4 +1,4 @@
-# MicrobiomeVisualizer2
+# Microbiome Visualizer 
 
 MicrobiomeVisualizer2 is an interactive R Shiny application designed to facilitate comprehensive microbiome data analysis. The app provides a user-friendly dashboard interface that allows researchers to explore, visualize, and analyze their microbiome data through a series of interactive tabs.
 
