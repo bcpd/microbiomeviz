@@ -1,6 +1,6 @@
 # Microbiome Visualizer
 
-Microbiome Visualizer is an R Shiny application for validating, filtering, exploring, and exporting feature-by-sample microbiome abundance data with sample metadata.
+Microbiome Visualizer is an interactive R Shiny application for exploring microbiome taxonomic abundance data alongside sample metadata. It provides data filtering, heatmaps, Bray-Curtis ordination, longitudinal feature plots, MaAsLin 3 differential-abundance analysis, and downloadable results.
 
 ## Run the app
 
