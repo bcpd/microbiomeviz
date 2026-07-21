@@ -144,7 +144,8 @@ prepare_timeseries_data <- function(data, time_variable, features,
   plot_data
 }
 
-prepare_maaslin3_inputs <- function(data, fixed_effects, include_read_depth = FALSE) {
+prepare_maaslin3_inputs <- function(data, fixed_effects, reference_levels = NULL,
+                                    include_read_depth = FALSE) {
   validate_analysis_data(data, minimum_samples = 3L, analysis_name = "MaAsLin 3")
   if (length(fixed_effects) < 1L || any(!fixed_effects %in% names(data$metadata))) {
     stop("Choose one or more valid metadata variables as MaAsLin 3 fixed effects.", call. = FALSE)
@@ -167,6 +168,13 @@ prepare_maaslin3_inputs <- function(data, fixed_effects, include_read_depth = FA
       stop("MaAsLin 3 fixed effect '", variable,
            "' must have at least two distinct values after filtering.", call. = FALSE)
     }
+    if ((is.character(effect) || is.factor(effect) || is.logical(effect)) &&
+        length(unique(effect)) > 2L &&
+        (is.null(reference_levels) || !variable %in% names(reference_levels) ||
+         is.na(reference_levels[[variable]]) || !nzchar(reference_levels[[variable]]))) {
+      stop("Choose a reference level for categorical fixed effect '", variable,
+           "', which has more than two levels.", call. = FALSE)
+    }
   }
   if (nrow(data$abundance) < 2L) {
     stop("MaAsLin 3 requires at least two features after filtering.", call. = FALSE)
@@ -174,6 +182,28 @@ prepare_maaslin3_inputs <- function(data, fixed_effects, include_read_depth = FA
 
   model_metadata <- data$metadata[, setdiff(names(data$metadata), data$sample_id_column), drop = FALSE]
   rownames(model_metadata) <- data$metadata[[data$sample_id_column]]
+  reference_entries <- character()
+  if (length(reference_levels)) {
+    unknown_references <- setdiff(names(reference_levels), fixed_effects)
+    if (length(unknown_references)) {
+      stop("Reference levels were supplied for variables that are not fixed effects: ",
+           paste(unknown_references, collapse = ", "), call. = FALSE)
+    }
+    for (variable in names(reference_levels)) {
+      reference <- as.character(reference_levels[[variable]])
+      observed_levels <- unique(as.character(model_metadata[[variable]]))
+      if (length(reference) != 1L || is.na(reference) || !reference %in% observed_levels) {
+        stop("Reference level '", reference, "' is not present in fixed effect '", variable,
+             "'. Available levels: ", paste(observed_levels, collapse = ", "), ".",
+             call. = FALSE)
+      }
+      model_metadata[[variable]] <- factor(
+        as.character(model_metadata[[variable]]),
+        levels = c(reference, setdiff(observed_levels, reference))
+      )
+      reference_entries <- c(reference_entries, paste(variable, reference, sep = ","))
+    }
+  }
   model_effects <- fixed_effects
   if (isTRUE(include_read_depth)) {
     read_depth_name <- "sample_read_depth"
@@ -197,12 +227,17 @@ prepare_maaslin3_inputs <- function(data, fixed_effects, include_read_depth = FA
   list(
     input_data = as.data.frame(t(data$abundance), check.names = FALSE),
     input_metadata = model_metadata,
-    fixed_effects = model_effects
+    fixed_effects = model_effects,
+    reference = if (length(reference_entries)) paste(reference_entries, collapse = ";") else NULL
   )
 }
 
-run_maaslin3 <- function(data, fixed_effects, output_directory, include_read_depth = FALSE) {
-  inputs <- prepare_maaslin3_inputs(data, fixed_effects, include_read_depth)
+run_maaslin3 <- function(data, fixed_effects, output_directory, reference_levels = NULL,
+                         include_read_depth = FALSE) {
+  inputs <- prepare_maaslin3_inputs(
+    data, fixed_effects, reference_levels = reference_levels,
+    include_read_depth = include_read_depth
+  )
   if (!requireNamespace("maaslin3", quietly = TRUE)) {
     stop(
       paste0(
@@ -223,6 +258,7 @@ run_maaslin3 <- function(data, fixed_effects, output_directory, include_read_dep
     input_metadata = inputs$input_metadata,
     output = output_directory,
     fixed_effects = inputs$fixed_effects,
+    reference = inputs$reference,
     min_abundance = 0,
     min_prevalence = 0,
     max_prevalence = 1.01,

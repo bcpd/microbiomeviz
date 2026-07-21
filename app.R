@@ -125,6 +125,7 @@ app_ui <- shiny::fluidPage(
             "fixed_effect", "Fixed effect(s)", choices = character(),
             multiple = TRUE, options = list(placeholder = "Choose one or more metadata variables")
           ),
+          shiny::uiOutput("maaslin_reference_ui"),
           shiny::checkboxInput(
             "include_read_depth",
             "Use input column sum as read-depth covariate (raw counts only)",
@@ -135,7 +136,8 @@ app_ui <- shiny::fluidPage(
             paste(
               "The app passes the raw filtered feature table to MaAsLin 3, which models both abundance and prevalence.",
               "Settings are explicit: TSS normalization, log2 transformation, BH correction, metadata standardization,",
-              "abundance median comparison on, prevalence median comparison off, and q-value threshold 0.1."
+              "abundance median comparison on, prevalence median comparison off, and q-value threshold 0.1.",
+              "Reference levels are shown for categorical fixed effects and determine the baseline comparison."
             )
           ),
           shiny::verbatimTextOutput("differential_message"),
@@ -258,6 +260,52 @@ app_server <- function(input, output, session,
     )
   })
 
+  categorical_fixed_effects <- shiny::reactive({
+    data <- filtered_data()
+    fixed_effects <- intersect(input$fixed_effect %||% character(), names(data$metadata))
+    fixed_effects[vapply(
+      data$metadata[fixed_effects],
+      function(values) (is.character(values) || is.factor(values) || is.logical(values)) &&
+        length(unique(values)) >= 2L,
+      logical(1)
+    )]
+  })
+
+  maaslin_reference_input_id <- function(variable, data) {
+    paste0("maaslin_reference_", match(variable, names(data$metadata)))
+  }
+
+  output$maaslin_reference_ui <- shiny::renderUI({
+    data <- filtered_data()
+    variables <- categorical_fixed_effects()
+    if (!length(variables)) return(NULL)
+
+    shiny::tagList(
+      shiny::h4("Reference levels"),
+      lapply(variables, function(variable) {
+        levels <- unique(as.character(data$metadata[[variable]]))
+        shiny::selectInput(
+          maaslin_reference_input_id(variable, data),
+          paste("Reference for", variable),
+          choices = levels,
+          selected = levels[1L]
+        )
+      })
+    )
+  })
+
+  maaslin_reference_levels <- shiny::reactive({
+    data <- filtered_data()
+    variables <- categorical_fixed_effects()
+    if (!length(variables)) return(stats::setNames(character(), character()))
+    references <- vapply(
+      variables,
+      function(variable) input[[maaslin_reference_input_id(variable, data)]] %||% "",
+      character(1)
+    )
+    references[nzchar(references)]
+  })
+
   analysis_key <- shiny::reactive({
     metadata_source <- if (is.null(input$metadata_file)) default_metadata else input$metadata_file$datapath
     taxonomy_source <- if (is.null(input$taxonomy_file)) default_taxonomy else input$taxonomy_file$datapath
@@ -270,6 +318,7 @@ app_server <- function(input, output, session,
       input$min_prevalence %||% 0,
       input$min_total_abundance %||% 0,
       isTRUE(input$include_read_depth),
+      paste(names(maaslin_reference_levels()), maaslin_reference_levels(), sep = "=", collapse = ","),
       sep = "|"
     )
   })
@@ -457,6 +506,7 @@ app_server <- function(input, output, session,
       list(
         value = run_maaslin3(
           filtered_data(), fixed_effect, output_directory,
+          reference_levels = maaslin_reference_levels(),
           include_read_depth = isTRUE(input$include_read_depth)
         ),
         key = analysis_key()

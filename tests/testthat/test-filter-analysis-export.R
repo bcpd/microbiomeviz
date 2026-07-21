@@ -101,7 +101,10 @@ testthat::test_that("analysis prerequisites fail with actionable messages", {
 
   if (!requireNamespace("maaslin3", quietly = TRUE)) {
     testthat::expect_error(
-      run_maaslin3(filter_microbiome_data(load_fixture_data()), "Group", tempfile()),
+      run_maaslin3(
+        filter_microbiome_data(load_fixture_data()), "Group", tempfile(),
+        reference_levels = c(Group = "A")
+      ),
       "Bioconductor package 'maaslin3'.*BiocManager::install"
     )
   }
@@ -129,6 +132,18 @@ testthat::test_that("MaAsLin 3 inputs are aligned and read depth remains pre-fil
     prepare_maaslin3_inputs(filtered, "Group"),
     "must have at least two distinct values"
   )
+
+  all_groups <- filter_microbiome_data(data)
+  all_groups$metadata$Group[all_groups$metadata$SampleID == "S6"] <- "C"
+  testthat::expect_error(
+    prepare_maaslin3_inputs(all_groups, "Group"),
+    "Choose a reference level.*more than two levels"
+  )
+  referenced <- prepare_maaslin3_inputs(
+    all_groups, "Group", reference_levels = c(Group = "B")
+  )
+  testthat::expect_identical(referenced$reference, "Group,B")
+  testthat::expect_identical(levels(referenced$input_metadata$Group)[1L], "B")
 })
 
 testthat::test_that("MaAsLin 3 integration returns abundance and prevalence results", {
@@ -137,7 +152,10 @@ testthat::test_that("MaAsLin 3 integration returns abundance and prevalence resu
   output_directory <- tempfile("maaslin3-test-")
   on.exit(unlink(output_directory, recursive = TRUE), add = TRUE)
 
-  results <- run_maaslin3(data, "Group", output_directory, include_read_depth = FALSE)
+  results <- run_maaslin3(
+    data, "Group", output_directory,
+    reference_levels = c(Group = "A"), include_read_depth = FALSE
+  )
   expected_columns <- c(
     "feature", "name", "coef", "qval_individual", "qval_joint", "model"
   )
