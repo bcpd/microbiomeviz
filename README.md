@@ -1,31 +1,57 @@
-# Microbiome Visualizer 
+# Microbiome Visualizer
 
-MicrobiomeVisualizer2 is an interactive R Shiny application designed to facilitate comprehensive microbiome data analysis. The app provides a user-friendly dashboard interface that allows researchers to explore, visualize, and analyze their microbiome data through a series of interactive tabs.
+Microbiome Visualizer is an R Shiny application for validating, filtering, exploring, and exporting feature-by-sample microbiome abundance data with sample metadata.
 
-## Key Features
+## Run the app
 
-- **Data Summary:**  
-  Quickly review an overview of your microbiome data, including key statistics and summaries.
+Required packages:
 
-- **Data Filtering:**  
-  Apply filters to your data based on sample metadata or taxonomy, helping to narrow down the datasets for specific analyses.
+```r
+install.packages(c("shiny", "DT", "ggplot2", "pheatmap", "vegan", "testthat"))
+```
 
-- **Interactive Tables:**  
-  View sample metadata and taxonomy information in interactive tables powered by the `DT` package.
+MaAsLin 3 is optional and is needed only for differential abundance:
 
-- **Heatmap Visualization:**  
-  Generate clustered heatmaps of your taxonomy data using the `pheatmap` package, which helps visualize patterns and groupings among taxa.
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install("maaslin3")
+```
 
-- **Ordination Analysis (PCoA):**  
-  Perform Principal Coordinates Analysis (PCoA) using Bray-Curtis dissimilarity metrics (via the `vegan` package) and visualize the results with `ggplot2`.
+Start from the repository root:
 
-- **Timeseries Visualization:**  
-  (Placeholder) Designed to plot timeseries data, enabling the analysis of temporal trends in microbiome profiles.
+```r
+shiny::runApp()
+```
 
-- **Differential Abundance Analysis:**  
-  Run differential abundance analysis using the Maaslin2 package. The app generates both a visualization (bar plot) of significant features and a detailed results table.
+The bundled `sample_metadata.csv` and `taxonomy_data.csv` load by default. CSV files can also be uploaded in the app.
 
-- **Download Project Data:**  
-  Bundle and download project data for further analysis or sharing.
+## Input contract
 
+- Metadata: the first column contains unique, non-empty sample IDs.
+- Taxonomy/abundance: the first column contains unique, non-empty feature IDs; remaining column names are sample IDs.
+- Abundances must be numeric, finite, and non-negative.
+- At least two sample IDs must occur in both files. Exact matching is used.
+- Wholly blank metadata rows and unnamed, wholly blank metadata columns are removed and reported. Surrounding metadata whitespace is trimmed and reported.
+- Samples present in only one file are excluded and listed. Matched metadata is reordered to the abundance-file sample order.
 
+## Analysis behaviour
+
+Filter defaults preserve all matched samples and features. Filters operate on raw values. Prevalence is the percentage of retained samples where abundance is greater than zero.
+
+- Heatmap: shows the most abundant retained features. Raw abundance is the default; relative abundance is an explicit display-only option.
+- Ordination: uses raw filtered abundances, Bray-Curtis dissimilarity (`vegan::vegdist`), and two-dimensional classical multidimensional scaling (`stats::cmdscale`). It runs only when requested.
+- Timeseries: plots selected microbial features at every sampling time. Raw abundance is the default; relative abundance is an explicit display option. It does not average samples. Lines are drawn only after selecting a repeated-measures ID, so unrelated samples are never connected as a trajectory.
+- Differential abundance: passes samples-by-features raw filtered data and aligned metadata to MaAsLin 3, which fits abundance and prevalence models. The app explicitly uses TSS normalization, log2 transformation, BH correction, metadata standardization, abundance median comparison, no prevalence median comparison, and a 0.1 q-value threshold. An opt-in option uses pre-filter input column sums as a read-depth covariate; enable it only for raw-count inputs. It runs only when requested in a session-specific temporary directory.
+- Download: exports the same aligned filtered metadata and raw abundance data used by tables and analyses, plus filter and cleaning notes.
+
+The bundled data currently produce visible notes: one blank metadata row, five blank unnamed columns, trailing whitespace in `Group`, and two abundance-only control samples. These are not silently analyzed.
+
+## Tests
+
+A small deterministic dataset under `tests/testthat/fixtures/` covers validation, matching, filtering, ordination, heatmap and timeseries preparation, Shiny reactive propagation, and download consistency.
+
+```r
+Rscript tests/testthat.R
+```
+
+MaAsLin 3 itself is not exercised in the default test suite because it is an optional Bioconductor dependency. Its input prerequisites and missing-package message are validated by the application layer.
