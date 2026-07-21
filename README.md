@@ -48,10 +48,10 @@ The bundled data currently produce visible notes: one blank metadata row, five b
 
 ## Tests
 
-A small deterministic dataset under `tests/testthat/fixtures/` covers validation, matching, filtering, ordination, heatmap and timeseries preparation, Shiny reactive propagation, and download consistency.
+A small, reproducible dataset under `tests/testthat/fixtures/` is used to check input validation, sample matching, filtering, ordination, heatmaps, timeseries plots, filter updates throughout the app, and downloaded files.
 
 ```r
 Rscript tests/testthat.R
 ```
 
-MaAsLin 3 itself is not exercised in the default test suite because it is an optional Bioconductor dependency. Its input prerequisites and missing-package message are validated by the application layer.
+The tests run a small MaAsLin 3 analysis when the package is installed. If it is not installed, the remaining tests still check that the app explains how to enable differential-abundance analysis.
